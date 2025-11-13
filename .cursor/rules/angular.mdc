@@ -1,0 +1,75 @@
+---
+description: 'Angular (standalone) best practices — signals, reactive forms, Material, SCSS, feature structure'
+globs:
+  - 'apps/web/src/**/*.ts'
+  - 'apps/web/src/**/*.html'
+  - 'apps/web/src/**/*.scss'
+  - '!apps/web/src/**/*.spec.ts'
+alwaysApply: false
+---
+
+# Angular app conventions (Standalone, latest Angular)
+
+## Architecture
+
+- Use **standalone components only** (no NgModules).
+- Use `provideRouter`, `provideHttpClient`, and other `provide*` APIs in the bootstrap file.
+- Structure the app under `src/app` by **features**:
+  - `features/<feature-name>/` for main screens & flows.
+  - `shared/` for shared components, pipes, directives, models, and utilities.
+- Each feature gets:
+  - a main container component,
+  - a dedicated service (feature-level business logic),
+  - an optional routing file if it has child routes.
+
+## Components & signals
+
+- Prefer **signal-based APIs**:
+  - Inputs: `myInput = input<Type>();`
+  - Component state: `counter = signal<number>(0);`
+  - Derived state: `doubleCounter = computed(() => this.counter() * 2);`
+  - Queries: `viewChild.required()` / `viewChildren()`.
+- Avoid decorator-based `@Input()` and `@ViewChild()` in new code.
+- Avoid storing raw mutable state on `this`; use signals instead.
+
+## Forms (Reactive + typed)
+
+- Always use **Reactive Forms** with `NonNullableFormBuilder`.
+- Avoid template-driven forms (`ngModel`) in new code.
+- Create strongly-typed forms:
+  - Define form models with interfaces/types.
+  - Use typed `FormGroup`, `FormControl`, `FormArray`.
+- Encapsulate form setup logic in private methods for clarity.
+
+## Angular Material
+
+- Use Angular Material for UI components.
+- Centralize Material imports in a dedicated module-like file (even though the app is standalone):
+  - e.g., `src/app/shared/material.imports.ts` exporting `MATERIAL_IMPORTS` array.
+- In components, import Material modules via `imports: [MATERIAL_IMPORTS, ...]` where appropriate.
+- Prefer accessible configurations (labels, aria attributes, sensible tab order).
+
+## Styling: SCSS + Flex + Responsive
+
+- Use **SCSS** for styling, with **CSS Flexbox** and modern layout techniques.
+- Global styling and responsive breakpoints live in `src/styles.scss`.
+- Feature-specific styles live next to their components:
+  - e.g., `feature.component.scss`.
+- Use BEM-like or utility-friendly class naming, avoid deeply nested selectors.
+- Prefer layout components/wrappers instead of over-complicated CSS.
+
+## HTTP & services
+
+- Use Angular `HttpClient` with typed responses.
+- Wrap HTTP calls in feature-specific services:
+  - `src/app/features/<feature-name>/<feature-name>.service.ts`
+- Keep container components thin; delegate logic to services.
+- Handle errors via interceptors or service-level helpers where appropriate.
+
+## Testing (Angular)
+
+- Use Jest or Jasmine/Karma based on project setup.
+- For new components, generate specs but keep them focused:
+  - test inputs/outputs,
+  - basic rendering,
+  - logic in signals/computeds.

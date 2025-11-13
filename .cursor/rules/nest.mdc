@@ -1,0 +1,58 @@
+---
+description: 'NestJS backend best practices — modules, controllers, services, DTOs, validation'
+globs:
+  - 'apps/api/src/**/*.ts'
+  - '!apps/api/src/**/*.spec.ts'
+alwaysApply: false
+---
+
+# NestJS conventions
+
+## Architecture
+
+- Follow standard NestJS layered architecture:
+  - Controllers → Services → Repositories / Data access.
+- Group code by **domain feature**, not by technical layer:
+  - `apps/api/src/<feature>/`
+    - `<feature>.module.ts`
+    - `<feature>.controller.ts`
+    - `<feature>.service.ts`
+    - `dto/`
+    - `entities/` or `models/`
+- Keep controllers thin; move business logic into services.
+
+## DTOs & validation
+
+- Use DTO classes for all incoming requests, decorated with `class-validator`.
+- Use `class-transformer` with Nest’s validation pipe.
+- Keep DTOs in `dto/` folder under each feature.
+- Validate and sanitize external inputs at the controller boundary.
+
+## Types & entities
+
+- Keep DB entities or ORM models separate from DTOs.
+- Do not return ORM entities directly from controllers; map them to response DTOs when necessary.
+
+## Error handling
+
+- Use Nest’s exception system (`HttpException`, `NotFoundException`, etc.).
+- Avoid returning raw errors; always throw typed exceptions.
+- Consider creating custom exceptions for repeated patterns (e.g., entity not found).
+
+## Auth & security
+
+- Keep authentication and authorization logic in dedicated modules:
+  - `auth` module, guards, strategies, and decorators.
+- Do not mix auth logic into domain services.
+- Load secrets (e.g., JWT secrets) from environment variables, not hardcoded strings.
+
+## Logging
+
+- Use Nest’s logger or a central logger, not `console.log` in production code.
+- Log at appropriate levels: debug, log, warn, error.
+
+## Testing (Nest)
+
+- Use Nest’s `TestingModule` utilities for integration-like tests.
+- For pure services with no heavy Nest dependencies, test as plain classes when possible.
+- Mock external dependencies (DB, external HTTP) at the service boundary.

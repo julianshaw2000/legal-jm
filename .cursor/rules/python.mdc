@@ -1,0 +1,45 @@
+---
+description: 'Python ingestion & tooling — uv, typing, structure'
+globs:
+  - 'python/**/*.py'
+  - 'scripts/**/*.py'
+alwaysApply: false
+---
+
+# Python conventions for this project
+
+## Tooling & execution
+
+- Use `uv` for Python dependency management and running scripts:
+  - Add packages: `uv add <package>`
+  - Run scripts or modules: `uv run <script or -m module>`
+- Do not manually create or manage virtual environments; let `uv` handle environment isolation.
+
+## Structure
+
+- Keep Python code in:
+  - `python/` for libraries/modules,
+  - `scripts/` for CLI entry points.
+- Make CLI scripts thin: parse args, call functions from `python/` modules.
+
+## Typing & style
+
+- Use type hints throughout:
+  - Function parameters and return types.
+  - Typed dataclasses or Pydantic models where appropriate.
+- Aim for clean, readable code:
+  - `snake_case` for functions and variables,
+  - `PascalCase` for classes.
+- Keep functions small and testable, with clear parameters and no hidden global state.
+
+## Data & DB
+
+- For ingestion scripts:
+  - Separate data fetching, parsing, and persistence into distinct functions or modules.
+  - Handle DB connections via context managers or reusable helpers, not scattered throughout the code.
+- Avoid inline SQL inside complex logic; use helpers or repository-style abstraction where useful.
+
+## Logging & errors
+
+- Use the `logging` module instead of print for anything beyond temporary debugging.
+- Raise explicit exceptions with helpful messages; handle them at the appropriate layer.
