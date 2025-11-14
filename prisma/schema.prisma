@@ -1,0 +1,193 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+}
+
+// Core
+model User {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  password  String
+  role      Role      @default(VIEWER)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  orgs      UserOrg[]
+  apiKeys   ApiKey[]
+  sessions  Session[]
+}
+
+model Org {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  users     UserOrg[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model UserOrg {
+  userId String
+  orgId  String
+  role   Role   @default(VIEWER)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org  Org  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@id([userId, orgId])
+}
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  userId     String
+  keyHash    String
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Corpus
+model Source {
+  id        String     @id @default(cuid())
+  name      String
+  url       String?
+  createdAt DateTime   @default(now())
+  documents Document[]
+}
+
+model Document {
+  id          String       @id @default(cuid())
+  sourceId    String?
+  title       String
+  type        DocumentType
+  publishedAt DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  sections    Section[]
+  chunks      Chunk[]
+  amendments  Amendment[]
+  source      Source?      @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+}
+
+model Section {
+  id         String   @id @default(cuid())
+  documentId String
+  index      Int
+  heading    String?
+  text       String
+  createdAt  DateTime @default(now())
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  chunks     Chunk[]
+
+  @@unique([documentId, index])
+}
+
+model Amendment {
+  id          String    @id @default(cuid())
+  documentId  String
+  description String
+  effectiveAt DateTime?
+  createdAt   DateTime  @default(now())
+  document    Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+}
+
+model CaseLaw {
+  id        String    @id @default(cuid())
+  title     String
+  court     String?
+  decidedAt DateTime?
+  citation  String?
+  createdAt DateTime  @default(now())
+}
+
+model CrossReference {
+  id          String   @id @default(cuid())
+  fromSection String
+  toSection   String
+  createdAt   DateTime @default(now())
+}
+
+// RAG
+model Chunk {
+  id         String     @id @default(cuid())
+  documentId String
+  sectionId  String?
+  index      Int
+  text       String
+  embedding  Embedding?
+  createdAt  DateTime   @default(now())
+  document   Document   @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  section    Section?   @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+
+  @@unique([documentId, index])
+}
+
+model Embedding {
+  id      String                       @id @default(cuid())
+  chunkId String                       @unique
+  // pgvector(1536)
+  vector  Unsupported("vector(1536)")?
+  chunk   Chunk                        @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+}
+
+model QALog {
+  id        String     @id @default(cuid())
+  question  String
+  answer    String?
+  dryRun    Boolean    @default(false)
+  createdAt DateTime   @default(now())
+  feedbacks Feedback[]
+}
+
+model Feedback {
+  id        String   @id @default(cuid())
+  qaLogId   String
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+  qaLog     QALog    @relation(fields: [qaLogId], references: [id], onDelete: Cascade)
+}
+
+model IngestionJob {
+  id         String    @id @default(cuid())
+  source     String
+  status     String
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  error      String?
+}
+
+model EventLog {
+  id        String   @id @default(cuid())
+  level     String
+  message   String
+  context   String?
+  createdAt DateTime @default(now())
+}
+
+enum Role {
+  ADMIN
+  EDITOR
+  REVIEWER
+  OPERATOR
+  VIEWER
+}
+
+enum DocumentType {
+  ACT
+  REGULATION
+  CASE
+  OTHER
+}
