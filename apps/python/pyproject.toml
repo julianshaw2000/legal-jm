@@ -1,7 +1,7 @@
 [project]
 name = "py-service"
 version = "0.1.0"
-description = "Add your description here"
+description = "Legal document ingestion and AI worker for Jamaican legal data"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -13,5 +13,7 @@ dependencies = [
   "SQLAlchemy>=2.0",
   "psycopg2-binary>=2.9",
   "python-dotenv>=1.0",
+  "openai>=1.0",
+  "pydantic>=2.0",
   "tiktoken>=0.7; platform_system != 'Windows'",  # optional on Windows
 ]

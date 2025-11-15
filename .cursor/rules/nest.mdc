@@ -1,5 +1,5 @@
 ---
-description: 'NestJS backend best practices — modules, controllers, services, DTOs, validation'
+description: 'NestJS backend best practices — modules, controllers, services, DTOs, validation, Prisma, Render'
 globs:
   - 'apps/api/src/**/*.ts'
   - '!apps/api/src/**/*.spec.ts'
@@ -20,39 +20,105 @@ alwaysApply: false
     - `dto/`
     - `entities/` or `models/`
 - Keep controllers thin; move business logic into services.
+- Keep `AppModule` as a small composition root; do not put business logic there.
+- Cross-cutting concerns (logging, auth, interceptors, pipes) go in shared modules/utilities, not in features.
 
 ## DTOs & validation
 
 - Use DTO classes for all incoming requests, decorated with `class-validator`.
-- Use `class-transformer` with Nest’s validation pipe.
-- Keep DTOs in `dto/` folder under each feature.
-- Validate and sanitize external inputs at the controller boundary.
+- Use `class-transformer` with Nest’s global `ValidationPipe`:
+  - Enable `whitelist: true`, `forbidNonWhitelisted: true`, `transform: true`.
+- Keep DTOs in a `dto/` folder under each feature.
+- Validate and sanitize all external inputs at the controller boundary.
+- Do **not** reuse entities/Prisma models as DTOs; keep API contracts separate.
 
 ## Types & entities
 
-- Keep DB entities or ORM models separate from DTOs.
-- Do not return ORM entities directly from controllers; map them to response DTOs when necessary.
+- Keep DB entities / ORM models separate from DTOs and domain models.
+- Do not return ORM entities (or raw Prisma models) directly from controllers; map them to response DTOs where necessary.
+- Prefer explicit types for service method signatures; avoid `any`.
+- Use enums and union types for known finite sets of values (status, roles, etc.).
 
 ## Error handling
 
-- Use Nest’s exception system (`HttpException`, `NotFoundException`, etc.).
+- Use Nest’s exception system (`HttpException`, `NotFoundException`, `BadRequestException`, etc.).
 - Avoid returning raw errors; always throw typed exceptions.
-- Consider creating custom exceptions for repeated patterns (e.g., entity not found).
+- Consider creating custom exceptions for repeated patterns (e.g., `EntityNotFoundException`).
+- Use a global exception filter to:
+  - Normalize error responses (shape, codes).
+  - Hide internal error details in non-dev environments.
 
 ## Auth & security
 
 - Keep authentication and authorization logic in dedicated modules:
-  - `auth` module, guards, strategies, and decorators.
+  - `auth` module, guards, strategies, decorators.
 - Do not mix auth logic into domain services.
-- Load secrets (e.g., JWT secrets) from environment variables, not hardcoded strings.
+- Use guards for auth/role checks (e.g. `AuthGuard`, `RolesGuard`) and keep services focused on business rules.
+- Load secrets (JWT secrets, DB URLs, API keys) from environment variables via a config service, not hardcoded strings.
+- Never log secrets or sensitive data (passwords, tokens, full auth headers).
 
 ## Logging
 
-- Use Nest’s logger or a central logger, not `console.log` in production code.
-- Log at appropriate levels: debug, log, warn, error.
+- Use Nest’s `Logger` (or a centralized logger) instead of `console.log` in production code.
+- Log at appropriate levels: `debug`, `log`, `warn`, `error`.
+- Log high-level events in controllers/services (e.g., critical operations, failures), not every minor step.
+- Prefer structured logging (objects) over string concatenation where possible.
 
 ## Testing (Nest)
 
-- Use Nest’s `TestingModule` utilities for integration-like tests.
+- Use Nest’s `TestingModule` utilities for integration-like tests of controllers and services.
 - For pure services with no heavy Nest dependencies, test as plain classes when possible.
-- Mock external dependencies (DB, external HTTP) at the service boundary.
+- Mock external dependencies (DB, external HTTP, queues) at the service boundary.
+- Test guards, pipes, and interceptors for critical behavior (auth, validation, transformation).
+
+## Prisma & database access
+
+- Use **Prisma** as the single source of truth for the database schema:
+  - Keep `schema.prisma` in a consistent location (e.g. `apps/api/prisma/` or root `prisma/`).
+- Create a dedicated `PrismaService` that:
+  - Extends `PrismaClient`.
+  - Implements `OnModuleInit` and uses `enableShutdownHooks(app)` in `main.ts`.
+- Inject `PrismaService` into feature services; **never** call `new PrismaClient()` directly in controllers or services.
+- Keep data access logic in repositories/services; do not call Prisma directly from controllers.
+- Use Prisma’s `select` / `include` carefully to:
+  - Avoid overfetching.
+  - Avoid leaking sensitive fields (passwords, secrets).
+- Normalize Prisma errors in one place (e.g., in a repository or helper):
+  - Map unique constraint violations to `ConflictException` (409).
+  - Map not-found scenarios to `NotFoundException` (404) instead of generic 500s.
+- Run migrations via `prisma migrate`:
+  - Use `prisma migrate dev` only in local development.
+  - Use `prisma migrate deploy` for staging/production.
+
+## Configuration & environment (Render-friendly)
+
+- Use `@nestjs/config` (or a similar pattern) to manage configuration:
+  - Validate env vars with a schema (e.g., Joi/Zod).
+  - Expose typed getters for DB URL, JWT secret, etc.
+- Avoid using `process.env` directly in feature code; read env only in config modules/services.
+- Treat `DATABASE_URL`, `JWT_SECRET`, `PORT`, and other secrets as required env vars:
+  - The app should fail fast on missing or invalid configuration.
+- Keep an example template (`.env.example`) showing required configuration keys; never commit real secrets.
+
+## Render deployment considerations
+
+- Respect Render’s `PORT` environment variable:
+  - In `main.ts`, bind the HTTP server using `process.env.PORT || 3000`.
+  - Do not hardcode ports in the app.
+- Provide a simple health endpoint (e.g. `/health`) that:
+  - Returns 200 when the app and DB connectivity are OK.
+  - Is safe to be hit by Render health checks.
+- Keep the app stateless:
+  - No in-memory session state for user data; use DB/cache instead.
+- Expect horizontal scaling:
+  - Avoid relying on single-process in-memory caches for correctness.
+  - If caching is needed across instances, use Redis or another shared store.
+
+## Prisma + Render workflow
+
+- Do **not** run `prisma migrate dev` in Render; use `prisma migrate deploy` for production migrations.
+- Ensure `prisma generate` is run in a build or postinstall step, not repeatedly at runtime.
+- Handle DB startup and connectivity failures gracefully:
+  - Fail fast if the DB is unreachable at boot.
+  - Log Prisma connection errors clearly.
+- Avoid long-running blocking operations in request handlers (heavy CPU work); offload to background jobs if needed.

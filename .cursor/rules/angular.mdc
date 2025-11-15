@@ -21,55 +21,142 @@ alwaysApply: false
   - a main container component,
   - a dedicated service (feature-level business logic),
   - an optional routing file if it has child routes.
+- Prefer a lightweight **feature store** per feature using:
+  - readonly signals for UI,
+  - writable signals for local state,
+  - imperative methods for commands,
+  - `linkedSignal()` or `toSignal()` to sync external Observables.
+
+---
 
 ## Components & signals
 
-- Prefer **signal-based APIs**:
-  - Inputs: `myInput = input<Type>();`
-  - Component state: `counter = signal<number>(0);`
-  - Derived state: `doubleCounter = computed(() => this.counter() * 2);`
-  - Queries: `viewChild.required()` / `viewChildren()`.
+### Preferred signal-based APIs
+
+- Inputs:
+  myInput = input<Type>();
+  myRequired = input.required<Type>();
+
+- Local component state:
+  counter = signal<number>(0);
+
+- Derived state:
+  doubleCounter = computed(() => this.counter() \* 2);
+
+- View queries:
+  viewChild.required<ElementRef>();
+  viewChildren<ElementRef>();
+
+### General rules
+
 - Avoid decorator-based `@Input()` and `@ViewChild()` in new code.
-- Avoid storing raw mutable state on `this`; use signals instead.
+- Never store mutable state directly on `this`; always use signals.
+- Keep derived state in `computed()` instead of recomputing manually.
 
-## Forms (Reactive + typed)
+---
 
-- Always use **Reactive Forms** with `NonNullableFormBuilder`.
-- Avoid template-driven forms (`ngModel`) in new code.
-- Create strongly-typed forms:
-  - Define form models with interfaces/types.
-  - Use typed `FormGroup`, `FormControl`, `FormArray`.
-- Encapsulate form setup logic in private methods for clarity.
+## `effect()` vs `watch()`
+
+### Use `watch()` (preferred) for simple side-effects:
+
+- logging, analytics, localStorage, DOM access, router actions, external libs.
+
+Example:
+watch(this.selectedCase, value => console.log(value));
+
+### Use `effect()` only when:
+
+- multiple dependencies exist,
+- you need automatic dependency tracking,
+- logic is reactive.
+
+Never use `effect()` to mirror signals or sync Observables/forms.
+
+---
+
+## linkedSignal (sync external sources)
+
+### One-way:
+
+const user = linkedSignal({
+source: this.api.getUser(),
+initialValue: null,
+});
+
+### Two-way with FormControl:
+
+const name = linkedSignal({
+source: control.valueChanges,
+initialValue: '',
+forward: value => control.setValue(value, { emitEvent: false }),
+});
+
+Prefer linkedSignal over:
+
+- manual subscribe(),
+- effect(() => signal.set(other())),
+- repeated sync logic.
+
+Use computed() instead if the value is purely derived.
+
+---
+
+## Templates & Control Flow
+
+- Use new Angular control flow (`@if`, `@for`, `@switch`).
+- Avoid legacy `*ngIf`, `*ngFor`, etc.
+- Always use `track` for `@for`.
+
+Example:
+@for (item of items(); track item.id) {
+<app-row [item]="item" />
+}
+
+---
+
+## Forms (Reactive + Typed)
+
+- Always use Reactive Forms with NonNullableFormBuilder.
+- Avoid template-driven forms (`ngModel`).
+- Use typed FormGroup, FormControl, FormArray.
+- Sync forms with signals using linkedSignal().
+
+---
 
 ## Angular Material
 
-- Use Angular Material for UI components.
-- Centralize Material imports in a dedicated module-like file (even though the app is standalone):
-  - e.g., `src/app/shared/material.imports.ts` exporting `MATERIAL_IMPORTS` array.
-- In components, import Material modules via `imports: [MATERIAL_IMPORTS, ...]` where appropriate.
-- Prefer accessible configurations (labels, aria attributes, sensible tab order).
+- Centralize Material imports in `shared/material.imports.ts`.
+- Import in components via `imports: [MATERIAL_IMPORTS, ...]`.
+- Use ARIA labels, focus handling, proper tab order.
 
-## Styling: SCSS + Flex + Responsive
+---
 
-- Use **SCSS** for styling, with **CSS Flexbox** and modern layout techniques.
-- Global styling and responsive breakpoints live in `src/styles.scss`.
-- Feature-specific styles live next to their components:
-  - e.g., `feature.component.scss`.
-- Use BEM-like or utility-friendly class naming, avoid deeply nested selectors.
-- Prefer layout components/wrappers instead of over-complicated CSS.
+## Styling — SCSS, Flex, Responsive
 
-## HTTP & services
+- Use SCSS.
+- Use CSS Flexbox
+- Global styles in `src/styles.scss`.
+- Feature styles placed next to component files.
+- Prefer Flex/Grid layouts.
+- Avoid deep selectors.
+- Use layout wrappers.
 
-- Use Angular `HttpClient` with typed responses.
-- Wrap HTTP calls in feature-specific services:
-  - `src/app/features/<feature-name>/<feature-name>.service.ts`
-- Keep container components thin; delegate logic to services.
-- Handle errors via interceptors or service-level helpers where appropriate.
+---
 
-## Testing (Angular)
+## HTTP & Services
 
-- Use Jest or Jasmine/Karma based on project setup.
-- For new components, generate specs but keep them focused:
-  - test inputs/outputs,
-  - basic rendering,
-  - logic in signals/computeds.
+- Use HttpClient with strong typing.
+- Feature-level services only.
+- Convert Observables → signals only in store/service layer via linkedSignal or toSignal.
+- Use interceptors for global errors.
+
+---
+
+## Testing
+
+- Use Jest or Jasmine.
+- Keep tests focused: inputs/outputs, rendering, computed logic.
+- Test stores by reading signals after public method calls.
+- Avoid testing effect()/watch() internals.
+
+---
